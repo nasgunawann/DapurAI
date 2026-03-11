@@ -9,6 +9,7 @@ const apiKey = process.env.GEMINI_API_KEY;
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_HISTORY_ITEMS = 12;
+const STATUS_CACHE_TTL_MS = 60 * 1000;
 
 app.use(express.json({ limit: "8mb" }));
 app.use(express.static("public"));
@@ -18,8 +19,83 @@ if (apiKey) {
   genAI = new GoogleGenerativeAI(apiKey);
 }
 
+let aiStatusCache = {
+  state: genAI ? "checking" : "inactive",
+  checkedAt: 0,
+  detail: genAI ? "Belum dicek" : "API key belum diatur"
+};
+let aiStatusProbePromise = null;
+
+async function probeAIStatus() {
+  if (!genAI) {
+    aiStatusCache = {
+      state: "inactive",
+      checkedAt: Date.now(),
+      detail: "GEMINI_API_KEY belum diatur"
+    };
+    return aiStatusCache;
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: "balas: siap" }] }],
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: 6
+      }
+    });
+
+    aiStatusCache = {
+      state: "active",
+      checkedAt: Date.now(),
+      detail: "Koneksi ke Gemini berhasil"
+    };
+  } catch (error) {
+    const raw = error && error.message ? error.message : "Unknown error";
+    const state = /429|quota|rate/i.test(raw) ? "busy" : "inactive";
+
+    aiStatusCache = {
+      state,
+      checkedAt: Date.now(),
+      detail: raw
+    };
+  }
+
+  return aiStatusCache;
+}
+
+async function getAccurateAIStatus() {
+  const now = Date.now();
+  const cacheFresh = now - aiStatusCache.checkedAt < STATUS_CACHE_TTL_MS;
+
+  if (cacheFresh && aiStatusCache.checkedAt !== 0) {
+    return aiStatusCache;
+  }
+
+  if (!aiStatusProbePromise) {
+    aiStatusProbePromise = probeAIStatus().finally(() => {
+      aiStatusProbePromise = null;
+    });
+  }
+
+  return aiStatusProbePromise;
+}
+
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "DapurAI" });
+});
+
+app.get("/api/status", async (req, res) => {
+  const status = await getAccurateAIStatus();
+  res.json({
+    ok: true,
+    service: "DapurAI",
+    aiReady: status.state === "active",
+    state: status.state,
+    checkedAt: status.checkedAt,
+    detail: status.detail
+  });
 });
 
 app.post("/api/chat", async (req, res) => {

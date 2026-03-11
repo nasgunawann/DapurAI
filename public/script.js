@@ -5,15 +5,29 @@ const imageInput = document.getElementById("image-input");
 const imagePreview = document.getElementById("image-preview");
 const previewWrap = document.getElementById("preview-wrap");
 const submitBtn = document.getElementById("submit-btn");
+const aiStatusBadge = document.getElementById("ai-status-badge");
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const chatHistory = [];
 
 let selectedImage = null;
 
-function addMessage(role, content, isMarkdown = false) {
+function addMessage(role, content, isMarkdown = false, isThinking = false) {
   const bubble = document.createElement("div");
-  bubble.className = `message ${role}`;
+  const baseClasses =
+    "max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm transition-all duration-200";
+
+  const roleClasses = {
+    user: "ml-auto rounded-br-md bg-gradient-to-r from-spice-500 to-spice-700 text-white",
+    assistant:
+      "mr-auto rounded-bl-md border border-kitchen-100 bg-white text-slate-800 [&_ul]:ml-5 [&_ul]:list-disc [&_ol]:ml-5 [&_ol]:list-decimal [&_p]:mb-2 [&_p:last-child]:mb-0 [&_li]:mb-1",
+    error: "mx-auto border border-red-200 bg-red-50 text-red-700"
+  };
+
+  bubble.className = `${baseClasses} ${roleClasses[role] || roleClasses.assistant}`;
+  if (isThinking) {
+    bubble.classList.add("animate-pulse");
+  }
 
   if (isMarkdown) {
     const unsafeHtml = marked.parse(content || "");
@@ -31,6 +45,57 @@ function setLoading(isLoading) {
   submitBtn.disabled = isLoading;
   userInput.disabled = isLoading;
   imageInput.disabled = isLoading;
+}
+
+function setAIStatus(state) {
+  if (!aiStatusBadge) {
+    return;
+  }
+
+  const states = {
+    active: {
+      label: "Aktif",
+      classes: "bg-kitchen-100 text-kitchen-900"
+    },
+    inactive: {
+      label: "Tidak Aktif",
+      classes: "bg-red-100 text-red-700"
+    },
+    checking: {
+      label: "Mengecek...",
+      classes: "bg-slate-200 text-slate-600"
+    },
+    busy: {
+      label: "Sibuk",
+      classes: "bg-amber-100 text-amber-700"
+    }
+  };
+
+  const config = states[state] || states.checking;
+  aiStatusBadge.textContent = config.label;
+  aiStatusBadge.className =
+    `rounded-full px-3 py-1 text-[11px] font-medium sm:text-xs ${config.classes}`;
+}
+
+async function refreshAIStatus() {
+  setAIStatus("checking");
+  try {
+    const response = await fetch("/api/status", { cache: "no-store" });
+    if (!response.ok) {
+      setAIStatus("inactive");
+      return;
+    }
+
+    const data = await response.json();
+    if (data.state === "active" || data.state === "busy" || data.state === "inactive") {
+      setAIStatus(data.state);
+      return;
+    }
+
+    setAIStatus(data.aiReady ? "active" : "inactive");
+  } catch (error) {
+    setAIStatus("inactive");
+  }
 }
 
 function fileToBase64(file) {
@@ -55,7 +120,8 @@ imageInput.addEventListener("change", async (event) => {
 
   if (!file) {
     selectedImage = null;
-    previewWrap.style.display = "none";
+    previewWrap.classList.add("hidden");
+    previewWrap.classList.remove("flex");
     imagePreview.src = "";
     return;
   }
@@ -81,10 +147,12 @@ imageInput.addEventListener("change", async (event) => {
     };
 
     imagePreview.src = URL.createObjectURL(file);
-    previewWrap.style.display = "flex";
+    previewWrap.classList.remove("hidden");
+    previewWrap.classList.add("flex");
   } catch (error) {
     selectedImage = null;
-    previewWrap.style.display = "none";
+    previewWrap.classList.add("hidden");
+    previewWrap.classList.remove("flex");
     addMessage("error", error.message || "Gagal memproses gambar.");
   }
 });
@@ -107,7 +175,7 @@ chatForm.addEventListener("submit", async (event) => {
   }
 
   setLoading(true);
-  const thinkingBubble = addMessage("assistant", "Chef sedang berpikir...");
+  const thinkingBubble = addMessage("assistant", "Chef sedang berpikir...", false, true);
 
   try {
     const response = await fetch("/api/chat", {
@@ -123,25 +191,39 @@ chatForm.addEventListener("submit", async (event) => {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "Gagal mendapatkan respons dari server.");
+      const apiError = new Error(data.error || "Gagal mendapatkan respons dari server.");
+      apiError.status = response.status;
+      throw apiError;
     }
 
     thinkingBubble.remove();
     addMessage("assistant", data.reply, true);
+    setAIStatus("active");
     chatHistory.push({ role: "model", text: data.reply });
 
     userInput.value = "";
     imageInput.value = "";
     selectedImage = null;
     imagePreview.src = "";
-    previewWrap.style.display = "none";
+    previewWrap.classList.add("hidden");
+    previewWrap.classList.remove("flex");
   } catch (error) {
     thinkingBubble.remove();
+
+    if (error.status === 429) {
+      setAIStatus("busy");
+    } else if (error.status >= 500 || /belum diatur|konfigurasi/i.test(error.message || "")) {
+      setAIStatus("inactive");
+    }
+
     addMessage("error", error.message || "Terjadi kesalahan. Silakan coba lagi.");
   } finally {
     setLoading(false);
   }
 });
+
+refreshAIStatus();
+setInterval(refreshAIStatus, 60000);
 
 addMessage(
   "assistant",
