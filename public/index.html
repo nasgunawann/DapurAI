@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DapurAI - Smart Pantry Manager</title>
+    <style>
+      :root {
+        --green-900: #174d2d;
+        --green-700: #257243;
+        --green-500: #35a164;
+        --orange-700: #d36b14;
+        --orange-500: #f08a24;
+        --cream: #fff8ef;
+        --card: #ffffff;
+        --text: #1f2a23;
+        --muted: #5b6b61;
+        --danger: #b42318;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top right, #ffd9ad 0%, transparent 40%),
+          radial-gradient(circle at bottom left, #c8f0d8 0%, transparent 45%),
+          linear-gradient(160deg, #f4fff6 0%, #fff8ef 45%, #fff3e2 100%);
+        min-height: 100vh;
+      }
+
+      .page {
+        width: min(960px, 94vw);
+        margin: 28px auto;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid #d6e8dc;
+        border-radius: 18px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 14px 32px rgba(23, 77, 45, 0.12);
+        overflow: hidden;
+      }
+
+      .header {
+        padding: 20px 22px;
+        background: linear-gradient(100deg, var(--green-900), var(--green-700));
+        color: #fff;
+      }
+
+      .header h1 {
+        margin: 0 0 6px;
+        font-size: clamp(1.3rem, 2.2vw, 1.7rem);
+      }
+
+      .header p {
+        margin: 0;
+        opacity: 0.92;
+      }
+
+      #chat-box {
+        height: min(62vh, 640px);
+        overflow-y: auto;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .message {
+        padding: 12px 14px;
+        border-radius: 14px;
+        max-width: 86%;
+        line-height: 1.5;
+        animation: fadeSlide 0.2s ease-out;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: linear-gradient(120deg, var(--orange-500), var(--orange-700));
+        color: #fff;
+      }
+
+      .message.assistant {
+        align-self: flex-start;
+        background: var(--card);
+        border: 1px solid #d8e7dd;
+      }
+
+      .message.error {
+        align-self: center;
+        background: #fee4e2;
+        border: 1px solid #f7b2ac;
+        color: var(--danger);
+      }
+
+      .composer {
+        border-top: 1px solid #dbeadf;
+        padding: 16px;
+        background: #fbfff9;
+      }
+
+      #chat-form {
+        display: grid;
+        gap: 10px;
+      }
+
+      #user-input {
+        width: 100%;
+        min-height: 76px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid #c9dccc;
+        padding: 10px 12px;
+        font: inherit;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      #image-input {
+        flex: 1 1 240px;
+      }
+
+      button[type="submit"] {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+        background: linear-gradient(120deg, var(--green-700), var(--green-500));
+        color: #fff;
+      }
+
+      button[disabled] {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      #preview-wrap {
+        display: none;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #image-preview {
+        width: 62px;
+        height: 62px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid #bfd8c7;
+      }
+
+      .disclaimer {
+        margin: 8px 2px 0;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      @keyframes fadeSlide {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          width: 96vw;
+          margin: 14px auto;
+          border-radius: 14px;
+        }
+
+        .message {
+          max-width: 94%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <h1>DapurAI - Smart Pantry Manager</h1>
+        <p>Masukkan bahan dapurmu atau unggah foto kulkas. Chef AI siap bantu.</p>
+      </header>
+
+      <section id="chat-box" aria-live="polite"></section>
+
+      <section class="composer">
+        <form id="chat-form">
+          <textarea
+            id="user-input"
+            placeholder="Contoh: Saya punya telur, bayam, bawang putih, dan nasi dingin..."
+            required
+          ></textarea>
+
+          <div class="row">
+            <input id="image-input" type="file" accept="image/*" />
+            <button type="submit" id="submit-btn">Kirim ke Chef</button>
+          </div>
+
+          <div id="preview-wrap">
+            <img id="image-preview" alt="Preview bahan" />
+            <small>Preview foto bahan.</small>
+          </div>
+
+          <p class="disclaimer">Saran masak ini bersifat edukasi, perhatikan alergi Anda.</p>
+        </form>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
