@@ -1,7 +1,13 @@
 require("dotenv").config();
 
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const systemInstruction = fs
+  .readFileSync(path.join(__dirname, "system-instruction.txt"), "utf8")
+  .trim();
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -9,7 +15,6 @@ const apiKey = process.env.GEMINI_API_KEY;
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_HISTORY_ITEMS = 12;
-const STATUS_CACHE_TTL_MS = 60 * 1000;
 
 app.use(express.json({ limit: "8mb" }));
 app.use(express.static("public"));
@@ -19,82 +24,34 @@ if (apiKey) {
   genAI = new GoogleGenerativeAI(apiKey);
 }
 
+// Status derived purely from chat results — zero extra RPD wasted on probes.
 let aiStatusCache = {
-  state: genAI ? "checking" : "inactive",
-  checkedAt: 0,
-  detail: genAI ? "Belum dicek" : "API key belum diatur"
+  state: genAI ? "active" : "inactive",
+  checkedAt: Date.now(),
+  detail: genAI ? "API key terkonfigurasi" : "GEMINI_API_KEY belum diatur"
 };
-let aiStatusProbePromise = null;
 
-async function probeAIStatus() {
-  if (!genAI) {
-    aiStatusCache = {
-      state: "inactive",
-      checkedAt: Date.now(),
-      detail: "GEMINI_API_KEY belum diatur"
-    };
-    return aiStatusCache;
-  }
-
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: "balas: siap" }] }],
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens: 6
-      }
-    });
-
-    aiStatusCache = {
-      state: "active",
-      checkedAt: Date.now(),
-      detail: "Koneksi ke Gemini berhasil"
-    };
-  } catch (error) {
-    const raw = error && error.message ? error.message : "Unknown error";
-    const state = /429|quota|rate/i.test(raw) ? "busy" : "inactive";
-
-    aiStatusCache = {
-      state,
-      checkedAt: Date.now(),
-      detail: raw
-    };
-  }
-
-  return aiStatusCache;
-}
-
-async function getAccurateAIStatus() {
-  const now = Date.now();
-  const cacheFresh = now - aiStatusCache.checkedAt < STATUS_CACHE_TTL_MS;
-
-  if (cacheFresh && aiStatusCache.checkedAt !== 0) {
-    return aiStatusCache;
-  }
-
-  if (!aiStatusProbePromise) {
-    aiStatusProbePromise = probeAIStatus().finally(() => {
-      aiStatusProbePromise = null;
-    });
-  }
-
-  return aiStatusProbePromise;
+function setStatusFromChatResult(success, errorMsg) {
+  const raw = errorMsg || "";
+  aiStatusCache = {
+    state: success ? "active" : (/429|quota|rate/i.test(raw) ? "busy" : "inactive"),
+    checkedAt: Date.now(),
+    detail: success ? "Permintaan terakhir berhasil" : (raw || "Permintaan terakhir gagal")
+  };
 }
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "DapurAI" });
 });
 
-app.get("/api/status", async (req, res) => {
-  const status = await getAccurateAIStatus();
+app.get("/api/status", (req, res) => {
   res.json({
     ok: true,
     service: "DapurAI",
-    aiReady: status.state === "active",
-    state: status.state,
-    checkedAt: status.checkedAt,
-    detail: status.detail
+    aiReady: aiStatusCache.state === "active",
+    state: aiStatusCache.state,
+    checkedAt: aiStatusCache.checkedAt,
+    detail: aiStatusCache.detail
   });
 });
 
@@ -149,8 +106,7 @@ app.post("/api/chat", async (req, res) => {
 
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      systemInstruction:
-        "You are a Professional Zero-Waste Chef. Create delicious recipes from user's ingredients. If ingredients are incompatible, suggest one or two missing items to buy. Always use a friendly, encouraging tone in Bahasa Indonesia.",
+      systemInstruction,
       generationConfig: {
         temperature: 0.7,
         topP: 0.95,
@@ -181,6 +137,7 @@ app.post("/api/chat", async (req, res) => {
     });
 
     const reply = result.response.text();
+    setStatusFromChatResult(true, null);
 
     return res.json({
       reply,
@@ -188,6 +145,8 @@ app.post("/api/chat", async (req, res) => {
     });
   } catch (error) {
     const raw = error && error.message ? error.message : "Unknown error";
+
+    setStatusFromChatResult(false, raw);
 
     if (/429|quota|rate/i.test(raw)) {
       return res.status(429).json({

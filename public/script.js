@@ -6,11 +6,74 @@ const imagePreview = document.getElementById("image-preview");
 const previewWrap = document.getElementById("preview-wrap");
 const submitBtn = document.getElementById("submit-btn");
 const aiStatusBadge = document.getElementById("ai-status-badge");
+const clearMemoryBtn = document.getElementById("clear-memory-btn");
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const chatHistory = [];
+const CHAT_MEMORY_KEY = "dapurai.chatHistory.v1";
 
 let selectedImage = null;
+
+function persistChatHistory() {
+  try {
+    localStorage.setItem(CHAT_MEMORY_KEY, JSON.stringify(chatHistory));
+  } catch (error) {
+    // Ignore storage failures (private mode/quota) and keep app functional.
+  }
+}
+
+function appendHistoryEntry(entry) {
+  chatHistory.push(entry);
+  persistChatHistory();
+}
+
+function restoreChatHistory() {
+  try {
+    const raw = localStorage.getItem(CHAT_MEMORY_KEY);
+    if (!raw) {
+      return false;
+    }
+
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved) || saved.length === 0) {
+      return false;
+    }
+
+    for (const item of saved) {
+      if (!item || typeof item !== "object") {
+        continue;
+      }
+
+      const role = item.role === "user" ? "user" : item.role === "model" ? "model" : null;
+      if (!role || typeof item.text !== "string" || !item.text.trim()) {
+        continue;
+      }
+
+      chatHistory.push({ role, text: item.text });
+      addMessage(role === "user" ? "user" : "assistant", item.text, role === "model");
+    }
+
+    return chatHistory.length > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+function clearStoredMemory() {
+  chatHistory.length = 0;
+  try {
+    localStorage.removeItem(CHAT_MEMORY_KEY);
+  } catch (error) {
+    // Ignore storage failures and continue clearing visible state.
+  }
+
+  chatBox.innerHTML = "";
+  addMessage(
+    "assistant",
+    "Halo! Saya DapurAI. Kirim daftar bahan atau foto kulkasmu, lalu saya bantu resep kreatif + tips zero-waste.",
+    false
+  );
+}
 
 function addMessage(role, content, isMarkdown = false, isThinking = false) {
   const bubble = document.createElement("div");
@@ -115,6 +178,13 @@ function fileToBase64(file) {
   });
 }
 
+userInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    chatForm.requestSubmit();
+  }
+});
+
 imageInput.addEventListener("change", async (event) => {
   const file = event.target.files && event.target.files[0];
 
@@ -168,10 +238,10 @@ chatForm.addEventListener("submit", async (event) => {
 
   if (message) {
     addMessage("user", message);
-    chatHistory.push({ role: "user", text: message });
+    appendHistoryEntry({ role: "user", text: message });
   } else {
     addMessage("user", "[Mengirim foto bahan]");
-    chatHistory.push({ role: "user", text: "Saya mengirim foto bahan. Tolong analisis." });
+    appendHistoryEntry({ role: "user", text: "Saya mengirim foto bahan. Tolong analisis." });
   }
 
   setLoading(true);
@@ -199,7 +269,7 @@ chatForm.addEventListener("submit", async (event) => {
     thinkingBubble.remove();
     addMessage("assistant", data.reply, true);
     setAIStatus("active");
-    chatHistory.push({ role: "model", text: data.reply });
+    appendHistoryEntry({ role: "model", text: data.reply });
 
     userInput.value = "";
     imageInput.value = "";
@@ -225,8 +295,14 @@ chatForm.addEventListener("submit", async (event) => {
 refreshAIStatus();
 setInterval(refreshAIStatus, 60000);
 
-addMessage(
-  "assistant",
-  "Halo! Saya DapurAI. Kirim daftar bahan atau foto kulkasmu, lalu saya bantu resep kreatif + tips zero-waste.",
-  false
-);
+if (!restoreChatHistory()) {
+  addMessage(
+    "assistant",
+    "Halo! Saya DapurAI. Kirim daftar bahan atau foto kulkasmu, lalu saya bantu resep kreatif + tips memakai bahan yang tersedia.",
+    false
+  );
+}
+
+if (clearMemoryBtn) {
+  clearMemoryBtn.addEventListener("click", clearStoredMemory);
+}

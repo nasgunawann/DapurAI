@@ -54,11 +54,13 @@
           <h1 class="text-sm font-semibold text-kitchen-900 sm:text-base">DapurAI</h1>
           <p class="text-[11px] text-slate-500 sm:text-xs">Asisten memasak kamu</p>
         </div>
-        <span
-          id="ai-status-badge"
-          class="rounded-full bg-slate-200 px-3 py-1 text-[11px] font-medium text-slate-600 sm:text-xs"
-          >Mengecek...</span
-        >
+        <div class="flex items-center gap-2">
+          <span
+            id="ai-status-badge"
+            class="rounded-full bg-slate-200 px-3 py-1 text-[11px] font-medium text-slate-600 sm:text-xs"
+            >Mengecek...</span
+          >
+        </div>
       </header>
 
       <section
@@ -69,25 +71,29 @@
 
       <section class="border-t border-kitchen-100/80 bg-white/92 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 sm:px-5 sm:py-3">
         <form id="chat-form" class="space-y-2">
-          <textarea
-            id="user-input"
-            class="w-full resize-none rounded-xl border border-kitchen-100 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-kitchen-600 focus:ring-2 focus:ring-kitchen-200"
-            placeholder="Contoh: Saya punya telur, bayam, bawang putih, dan nasi dingin..."
-            rows="2"
-            required
-          ></textarea>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <input
-              id="image-input"
-              type="file"
-              accept="image/*"
-              class="block min-w-0 flex-1 cursor-pointer rounded-lg border border-kitchen-100 bg-white px-2 py-1 text-xs text-slate-500 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-kitchen-100 file:px-2 file:py-1 file:font-medium file:text-kitchen-900 hover:file:bg-kitchen-200"
-            />
+          <div class="flex items-end gap-2">
+            <textarea
+              id="user-input"
+              class="min-h-10 max-h-32 flex-1 resize-y rounded-xl border border-kitchen-100 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-kitchen-600 focus:ring-2 focus:ring-kitchen-200"
+              placeholder="Contoh: Saya punya telur, bayam, bawang putih, dan nasi dingin..."
+              rows="1"
+              required
+            ></textarea>
+            <input id="image-input" type="file" accept="image/*" class="sr-only" />
+            <label
+              for="image-input"
+              class="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-kitchen-200 bg-white text-kitchen-700 transition hover:border-kitchen-400 hover:bg-kitchen-50"
+              title="Tambahkan foto bahan"
+              aria-label="Tambahkan foto bahan"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5" aria-hidden="true">
+                <path d="M21.44 11.05l-8.49 8.49a6 6 0 01-8.49-8.49l8.49-8.49a4 4 0 115.66 5.66l-8.49 8.49a2 2 0 11-2.83-2.83l7.78-7.78" />
+              </svg>
+            </label>
             <button
               type="submit"
               id="submit-btn"
-              class="rounded-xl bg-gradient-to-r from-kitchen-700 to-kitchen-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="h-10 rounded-xl bg-kitchen-700 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Kirim
             </button>
@@ -102,7 +108,16 @@
             <small class="text-xs text-slate-600">Preview foto bahan</small>
           </div>
 
-          <p class="text-[11px] text-slate-500">Proyek Demo. Merefresh halaman akan menghapus riwayat percakapan.</p>
+          <div class="flex items-center gap-2">
+            <p class="text-[11px] text-slate-500">Memori chat disimpan secara lokal di browser ini.</p>
+            <button
+              id="clear-memory-btn"
+              type="button"
+              class="shrink-0 rounded-full border border-red-200 bg-white px-3 py-1 text-[11px] font-medium text-red-700 transition hover:border-red-400 hover:bg-red-50 sm:text-xs"
+            >
+              Hapus Riwayat Pesan
+            </button>
+          </div>
         </form>
       </section>
     </main>
